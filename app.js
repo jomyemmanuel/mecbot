@@ -98,7 +98,10 @@ telegram.on("text", (message) => {
     });    
   }
   else{
-    telegram.sendMessage(message.chat.id, "Unrecognized Command");
+    var str = "*Please Send It In This Format*\n" + "/marks <class> <rollno>"
+    telegram.sendMessage(message.chat.id, str , {
+      parse_mode: "Markdown"
+    });
   }
 });
 
