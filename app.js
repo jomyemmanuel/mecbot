@@ -26,8 +26,84 @@ app.use(cookieParser());
 app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use('/', routes);
 app.use('/users', users);
+app.set('json spaces', 40);
 
-app.get('/scrape/:class/:roll', function(req, res){
+var TelegramBot = require('node-telegram-bot-api'),
+    telegram = new TelegramBot("API TOKEN", { polling: true });
+
+telegram.on("text", (message) => {
+  msg = message.text.split(" ");
+  console.log(msg.length);
+  if(msg.length === 3){
+    request({
+      uri: "http://www-mec.mec.ac.in/sessional-marks/sessional-individual-student.php",
+      method: "POST",
+      timeout: 5000,
+      form: {
+        "class" : msg[1].toUpperCase(),
+        "rollno" : msg[2]
+      }
+    },
+    function(error, response, body) {
+      if(error) {
+        console.log(error);
+        var str = "*Please Send It In This Format*\n" + "/marks <class> <rollno>"
+        telegram.sendMessage(message.chat.id, str , {
+          parse_mode: "Markdown"
+        });
+      } else {
+        var $ = cheerio.load(body);
+        var row = $('tr');
+        if (row.length > 0) {
+          var str = '';
+          for( i = 3; i < row.length; i++){
+            var build = [];
+            $(row[i]).find('td').each (function() {
+              var text = $( this ).html().trim();
+              build.push(text);
+            });
+            var marks = {
+              'sub' : build[0],
+              'asg1' : build[1],
+              'asg2' : build[2],
+              'attn' : build[3],
+              'ser1' : build[4],
+              'ser2' : build[5]
+            };
+            if(build.length > 5){
+              marks['total'] = build[6];
+            }
+            else{
+              marks['total'] = '--';
+            }
+            str = str + '*Sub*' + " : " + marks['sub'] + '\n' +
+                      '*asg1*' + " : " + marks['asg1'] + '\n' +
+                      '*asg2*' + " : " + marks['asg2'] + '\n' +
+                      '*attn*' + " : " + marks['attn'] + '\n' +
+                      '*ser1*' + " : " + marks['ser1'] + '\n' +
+                      '*ser2*' + " : " + marks['ser2'] + '\n' +
+                      '*total*' + " : " + marks['total'] + '\n\n';
+          }
+          telegram.sendMessage(message.chat.id, str, {
+            parse_mode: "Markdown"
+          });
+        }
+        else {
+          var str = "*No Such Record Exists!*\n";
+          telegram.sendMessage(message.chat.id, str , {
+            parse_mode: "Markdown"
+          });
+        }
+      }
+    });    
+  }
+  else{
+    telegram.sendMessage(message.chat.id, "Unrecognized Command");
+  }
+});
+
+
+app.get('/marks/:class/:roll', function(req, res){
   if (req.method === 'GET') {
     request({
       uri: "http://www-mec.mec.ac.in/sessional-marks/sessional-individual-student.php",
@@ -50,10 +126,34 @@ app.get('/scrape/:class/:roll', function(req, res){
         //   console.log(data);
         // })
         //console.log($("table:eq(1) tbody tr:nth-child(3)")[0]);
-        var row = $("table tbody tr td");
-        $('td').each(function() {
-          console.log($( this ).html());
-        });
+        var row = $("table tr td");
+        var array = [];
+        var row = $('tr');
+        for( i = 3; i < row.length; i++){
+          var build = [];
+          $(row[i]).find('td').each (function() {
+            var text = $( this ).html().trim();
+            build.push(text);
+          });
+          var marks = {
+            'sub' : build[0],
+            'asg1' : build[1],
+            'asg2' : build[2],
+            'attn' : build[3],
+            'ser1' : build[4],
+            'ser2' : build[5]
+          };
+          if(build.length > 5){
+            marks['total'] = build[6];
+          }
+          else{
+            marks['total'] = '--';
+          }
+          array.push(marks);
+        }
+        console.log(array);
+        //array = JSON.stringify(array);
+        res.json(array);
       }
     });    
   } else {
